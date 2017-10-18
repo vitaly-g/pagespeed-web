@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<!--
+To change this license header, choose License Headers in Project Properties.
+To change this template file, choose Tools | Templates
+and open the template in the editor.
+-->
+<html>
+    <head>
+        <title>PageSpeed</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <!-- Latest compiled and minified CSS -->
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+        <link href="libs/bootstrap-datepicker/css/bootstrap-datepicker.standalone.min.css" rel="stylesheet" type="text/css"/>
+        <!-- Optional theme -->
+        <!--<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap-theme.min.css">-->
+        <!--<link href="https://uxsolutions.github.io/bootstrap-datepicker/bootstrap-datepicker/css/bootstrap-datepicker3.min.css" rel="stylesheet">-->
+
+        <style>
+            body {
+                padding-top: 20px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <form class="form-horizontal">
+                <div class="form-group">
+                    <label for="inputEmail3" class="col-sm-2 control-label">Выберите адрес</label>
+                    <div class="col-sm-10">
+                        <select class="form-control" id="mySelect" name="mySelect">
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="inputEmail3" class="col-sm-2 control-label">Начало периода</label>
+                    <div class="col-sm-10">
+                        <div class="input-group date">
+                            <input type="text" class="form-control" id="periodBegin">
+                            <div class="input-group-addon">
+                                <span class="glyphicon glyphicon-th"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="inputEmail3" class="col-sm-2 control-label">Конец периода</label>
+                    <div class="col-sm-10">
+                        <div class="input-group date">
+                            <input type="text" class="form-control" id="periodEnd">
+                            <div class="input-group-addon">
+                                <span class="glyphicon glyphicon-th"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <div class="col-sm-offset-2 col-sm-10">
+                        <button type="button" class="btn btn-primary" onclick="getRes()">Показать</button>
+                        <button type="button" class="btn btn-primary" onclick="checkSpeed()">Запустить проверку</button>
+                    </div>
+                </div>                
+            </form>
+
+            <div id="chartContainer">
+                <canvas id="myChart"></canvas>
+            </div>
+
+        </div>
+
+
+        <script src="https://code.jquery.com/jquery-3.1.1.min.js"></script>
+        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+        <script src="http://momentjs.com/downloads/moment.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.4.0/Chart.js"></script>
+        <script src="libs/bootstrap-datepicker/js/bootstrap-datepicker.min.js" type="text/javascript"></script>
+        <script src="libs/bootstrap-datepicker/locales/bootstrap-datepicker.ru.min.js" type="text/javascript"></script>
+        <script>
+                            var criticalDesktop = 75;
+                            
+                            function checkSpeed() {
+                                $.get("/pagespeed/api/start", function () {
+                                    getRes();
+                                });
+                            }
+
+                            function getCritical(callback) {
+                                $.get("/pagespeed/api/get_critical_value_for_desktop", function (criticalZone) {
+                                    callback(criticalZone);
+                                });
+                            }
+
+                            function getAddressList(callback) {
+                                var selectList = document.getElementById("mySelect");//document.createElement("select");
+                                selectList.id = "mySelect";
+                                $.get("/pagespeed/api/getAddressList", function (address) {
+                                    for (var i = 0; i < address.length; i++) {
+                                        var option = document.createElement("option");
+                                        option.value = address[i].id;
+                                        option.text = address[i].url;
+                                        selectList.appendChild(option);
+                                    }
+                                    callback();
+                                });
+                            }
+
+                            function getRes() {
+                                var periodBegin = document.getElementById('periodBegin');
+                                var periodEnd = document.getElementById('periodEnd');
+                                var addressId = mySelect.value;
+                                var scoresDesktop = [];
+                                var datesDesktop = [];
+                                var datesMobile = [];
+                                var scoresMobile = [];
+                                var dateLast;
+                                $.get("/pagespeed/api/page-insight?period_begin=" + moment(periodBegin.value, "DD.MM.YYYY").format("YYYY-MM-DD") + "T00:00:00&period_end=" + moment(periodEnd.value, "DD.MM.YYYY").format("YYYY-MM-DD") + "T23:59:59&address_id=" + addressId, function (res) {
+                                    $.each(res, function () {
+                                        if (this.type === "desktop") {
+                                            datesDesktop.push(moment(this.date).format("DD-MM-YYYY HH:mm"));
+                                            scoresDesktop.push(this.score);
+                                            dateLast = this.date;
+                                        } else
+                                        {
+                                            datesMobile.push(moment(this.date).format("DD-MM-YYYY HH:mm"));
+                                            scoresMobile.push(this.score);
+                                        }
+
+                                    });
+                                    var a = datesDesktop.length;
+                                    var critical = [];
+                                    for (i = 0; i < a; i++) {
+                                        critical.push(criticalDesktop);
+                                    }
+
+                                    document.getElementById("myChart").remove();
+                                    var canvas = document.createElement('canvas');
+                                    canvas.setAttribute("id", "myChart");
+                                    document.getElementById("chartContainer").appendChild(canvas);
+
+                                    var ctx = document.getElementById("myChart");
+                                    var myChart = new Chart(ctx, {
+                                        type: 'bar',
+                                        data: {
+                                            labels: datesDesktop,
+                                            datasets: [
+                                                {
+                                                    type: 'line',
+                                                    label: 'Десктопная версия',
+                                                    data: scoresDesktop,
+                                                    borderColor: 'rgba(22, 138, 22, 0.5)',
+                                                    backgroundColor: "transparent"
+                                                },
+                                                {
+                                                    type: 'line',
+                                                    label: 'Мобильная версия',
+                                                    data: scoresMobile,
+                                                    borderColor: 'rgba(75,192,192,0.5)',
+                                                    backgroundColor: "transparent"
+                                                },
+                                                {
+                                                    type: 'line',
+                                                    label: 'Критическая зона',
+                                                    data: critical,
+                                                    borderColor: 'rgba(237, 24, 24, 0.2)',
+                                                    backgroundColor: 'rgba(237, 24, 24, 0.2)'
+                                                }
+                                            ]
+                                        }
+                                    });
+                                    var timeOut = moment(dateLast).add(30, 'minutes').subtract(Date.now(), 'milliseconds').toDate().getTime();
+                                    if (timeOut < 0) {
+                                        timeOut = 30 * 60 * 1000;
+                                    }
+                                    setTimeout(getRes, timeOut);
+                                });
+                            }
+
+                            $(function () {
+                                $('.date input').datepicker({
+                                    language: 'ru',
+                                    autoclose: true,
+                                    format: 'dd.mm.yyyy'
+                                });
+                                document.getElementById('periodBegin').value = moment().subtract(14, 'days').format("DD.MM.YYYY");
+                                document.getElementById('periodEnd').value = moment().format("DD.MM.YYYY");
+                                getCritical(function (criticalZone) {
+                                    criticalDesktop = criticalZone;
+                                    getAddressList(function () {
+                                        getRes();
+                                    });
+                                });
+                            });
+        </script>
+    </body>
+</html>
